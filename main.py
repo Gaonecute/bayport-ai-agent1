@@ -1,16 +1,12 @@
 from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional
 import httpx
-import uvicorn
+import os
 
 app = FastAPI()
 
-# Simulated CRM integration (Vtiger CRM API)
-VTIGER_API_URL = "https://example.vtigercrm.com/api"
-VTIGER_API_KEY = "your_api_key_here"
-
-# AI Agent prompts
 BASE_PROMPT = """
 You are BayportBot, a helpful and friendly AI assistant for Bayport Botswana. You help users with:
 - Downloading statements 📑
@@ -26,8 +22,7 @@ class UserQuery(BaseModel):
     user_id: Optional[str] = None
 
 async def query_openai(prompt: str) -> str:
-    # Call to OpenAI (replace with real API key and endpoint if needed)
-    headers = {"Authorization": f"Bearer your_openai_key"}
+    headers = {"Authorization": f"Bearer {os.getenv('OPENAI_API_KEY', 'your_openai_key')}"}
     async with httpx.AsyncClient() as client:
         response = await client.post(
             "https://api.openai.com/v1/chat/completions",
@@ -42,9 +37,70 @@ async def query_openai(prompt: str) -> str:
             headers=headers
         )
     result = response.json()
-    if "choices" in result and len(result["choices"]) > 0:
-        return result["choices"][0]["message"]["content"]
-    return "I'm sorry, I couldn't generate a response at the moment."
+    return result["choices"][0]["message"]["content"]
+
+@app.get("/", response_class=HTMLResponse)
+async def read_root():
+    html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Bayport AI Agent</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f5f7fa;
+                margin: 0;
+                padding: 2rem;
+            }
+            .container {
+                background: white;
+                padding: 2rem;
+                border-radius: 10px;
+                max-width: 600px;
+                margin: auto;
+                box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            }
+            h1 {
+                color: #1b365d;
+            }
+            ul {
+                list-style: none;
+                padding-left: 0;
+            }
+            ul li {
+                margin: 0.5rem 0;
+                padding-left: 1rem;
+                position: relative;
+            }
+            ul li::before {
+                content: \"✔\";
+                color: #1b365d;
+                position: absolute;
+                left: 0;
+            }
+            a {
+                color: #007bff;
+                text-decoration: none;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Welcome to Bayport AI Agent</h1>
+            <p>This digital assistant can help you:</p>
+            <ul>
+                <li>Download financial statements</li>
+                <li>Book settlements</li>
+                <li>Request callbacks</li>
+                <li>Chat with our AI agent</li>
+            </ul>
+            <p>👉 <a href='/docs'>Click here to open the full API interface</a></p>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
 
 @app.post("/chat")
 async def chat_with_user(user_query: UserQuery):
@@ -52,28 +108,15 @@ async def chat_with_user(user_query: UserQuery):
     response = await query_openai(user_message)
     return {"response": response}
 
-@app.post("/request-callback")
-async def request_callback(data: dict):
-    # Simulated Vtiger CRM API call to create a call-back request
-    payload = {
-        "api_key": VTIGER_API_KEY,
-        "module": "Leads",
-        "action": "create_callback",
-        "data": data
-    }
-    async with httpx.AsyncClient() as client:
-        crm_response = await client.post(f"{VTIGER_API_URL}/callback", json=payload)
-    return crm_response.json()
-
 @app.get("/download-statement")
 async def download_statement(user_id: str):
-    # Placeholder: Pull from user database or CRM
     return {"message": f"Statement for user {user_id} downloaded successfully."}
 
 @app.post("/book-settlement")
 async def book_settlement(data: dict):
-    # Placeholder for settlement booking logic
     return {"message": "Settlement successfully booked.", "details": data}
 
-# Use this to run with: uvicorn bayport_ai_agent:app --host 0.0.0.0 --port 8000 --reload
-# Only run this line manually from terminal, not from inside the script.
+@app.post("/request-callback")
+async def request_callback(data: dict):
+    return {"message": "Callback request received.", "details": data}
+
